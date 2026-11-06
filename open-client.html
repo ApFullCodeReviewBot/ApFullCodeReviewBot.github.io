@@ -5,21 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Open Desktop App</title>
 <style>
-:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--line:#d1d9e0;--accent:#0969da}
-@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#9198a1;--line:#3d444d;--accent:#4493f8}}
-body{background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,system-ui,sans-serif;margin:0 auto;max-width:620px;padding:32px 16px}
-h1{font-size:20px;margin:0 0 8px}p{color:var(--muted);margin:8px 0}
+:root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--line:#d1d9e0;--accent:#0969da;--done:#1a7f37}
+@media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#9198a1;--line:#3d444d;--accent:#4493f8;--done:#3fb950}}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,system-ui,sans-serif;margin:0 auto;max-width:620px;padding:32px 16px;position:relative}
+h1{font-size:20px;margin:0 40px 8px 0}p{color:var(--muted);margin:8px 0}
 pre{border:1px solid var(--line);border-radius:6px;padding:12px;white-space:pre-wrap;word-break:break-word}
 a.b,button{background:none;border:1px solid var(--line);border-radius:6px;color:var(--accent);cursor:pointer;display:inline-block;font:inherit;margin:4px 8px 4px 0;padding:6px 12px;text-decoration:none}
+button.done{border-color:var(--done);color:var(--done)}
+#close{color:var(--muted);line-height:1;margin:0;padding:6px 10px;position:absolute;right:16px;top:28px}
 </style>
 </head>
 <body>
+<button id="close" type="button" aria-label="Close this page">&times;</button>
 <h1 id="title">Open the desktop app</h1>
 <p id="note"></p>
 <pre id="prompt" hidden></pre>
 <p id="actions" hidden><a class="b" id="open">Open again</a><button id="copy" type="button">Copy the prompt</button></p>
 <script>
-// Takes only a client name and a PR: the prompt is fixed here, so a link cannot put other words into someone's app.
+// Links only fill in the app's message box: a person reads the prompt there and sends it.
+const MAX_PROMPT = 4000;
 const APPS = {
   claude: { name: 'Claude', link: (t) => 'claude://code/new?q=' + encodeURIComponent(t) },
   codex: { name: 'Codex', link: (t) => 'codex://new?prompt=' + encodeURIComponent(t) },
@@ -29,20 +33,51 @@ const APPS = {
 const query = new URLSearchParams(location.search);
 const app = Object.hasOwn(APPS, query.get('client') || '') ? APPS[query.get('client')] : null;
 const repo = query.get('repo') || '', pr = query.get('pr') || '';
+const hasPr = /^[\w.-]+\/[\w.-]+$/.test(repo) && /^\d+$/.test(pr);
+const given = (query.get('prompt') || '').trim();
+const fixPrompt = (url) => `Fix pull request ${url}: switch to its branch, read every unresolved review thread and failed check, fix what is a real problem, and answer on the thread why anything else needs no change. Resolve each thread you handle, commit and push to the same branch, then watch CI and fix what fails until it is green. Do not merge it.`;
+const text = given || (hasPr ? fixPrompt(`https://github.com/${repo}/pull/${pr}`) : '');
 const note = document.getElementById('note');
-if (!app || !/^[\w.-]+\/[\w.-]+$/.test(repo) || !/^\d+$/.test(pr)) {
-  note.textContent = 'This link needs a known client, a repository and a pull request number.';
+const copyButton = document.getElementById('copy');
+const copyLabel = copyButton.textContent;
+let copyTimer;
+
+function showCopied(label, done) {
+  copyButton.textContent = label;
+  copyButton.classList.toggle('done', done);
+  clearTimeout(copyTimer);
+  copyTimer = setTimeout(() => { copyButton.textContent = copyLabel; copyButton.classList.remove('done'); }, 2000);
+}
+
+async function copyPrompt() {
+  try {
+    await navigator.clipboard.writeText(text);
+    showCopied('✓ Copied', true);
+  } catch {
+    showCopied('Could not copy: select the text above', false);
+  }
+}
+
+document.getElementById('close').addEventListener('click', () => {
+  window.close(); // only a page a script opened may close itself
+  setTimeout(() => {
+    if (history.length > 1) history.back();
+    else note.textContent = 'This tab cannot close itself: close it from the browser.';
+  }, 200);
+});
+
+if (!app || !text) {
+  note.textContent = 'This link needs a known client, and a prompt or a repository and pull request number.';
+} else if (text.length > MAX_PROMPT) {
+  note.textContent = `This prompt is over ${MAX_PROMPT} characters, too long for a link.`;
 } else {
-  const text = `Resolve/fix comments of PR https://github.com/${repo}/pull/${pr} and monitor until CI is green`;
   const url = app.link(text);
-  const copy = () => { try { return navigator.clipboard.writeText(text).catch(() => {}); } catch { return Promise.resolve(); } };
   document.getElementById('title').textContent = `Opening ${app.name}`;
-  note.textContent = app.paste ? `${app.name} cannot be given a prompt by link: it is copied, paste it there.` : 'Nothing is sent until you press send there.';
+  note.textContent = app.paste ? `${app.name} cannot be given a prompt by link: copy it and paste it there.` : 'Nothing is sent until you press send there.';
   document.getElementById('prompt').textContent = text;
   document.getElementById('prompt').hidden = document.getElementById('actions').hidden = false;
   document.getElementById('open').href = url;
-  document.getElementById('copy').addEventListener('click', copy);
-  copy();
+  copyButton.addEventListener('click', copyPrompt);
   location.href = url;
 }
 </script>
