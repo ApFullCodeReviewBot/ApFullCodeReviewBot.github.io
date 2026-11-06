@@ -7,16 +7,17 @@
 <style>
 :root{--bg:#fff;--fg:#1f2328;--muted:#59636e;--line:#d1d9e0;--accent:#0969da;--done:#1a7f37}
 @media (prefers-color-scheme:dark){:root{--bg:#0d1117;--fg:#e6edf3;--muted:#9198a1;--line:#3d444d;--accent:#4493f8;--done:#3fb950}}
-body{background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,system-ui,sans-serif;margin:0 auto;max-width:620px;padding:32px 16px;position:relative}
-h1{font-size:20px;margin:0 40px 8px 0}p{color:var(--muted);margin:8px 0}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 -apple-system,system-ui,sans-serif;margin:0 auto;max-width:620px;padding:32px 16px}
+h1{font-size:20px;margin:0 0 8px}p{color:var(--muted);margin:8px 0}
 pre{border:1px solid var(--line);border-radius:6px;padding:12px;white-space:pre-wrap;word-break:break-word}
 a.b,button{background:none;border:1px solid var(--line);border-radius:6px;color:var(--accent);cursor:pointer;display:inline-block;font:inherit;margin:4px 8px 4px 0;padding:6px 12px;text-decoration:none}
 button.done{border-color:var(--done);color:var(--done)}
-#close{color:var(--muted);line-height:1;margin:0;padding:6px 10px;position:absolute;right:16px;top:28px}
+#back{font-size:14px;margin:0 0 16px}
+[hidden]{display:none!important}
 </style>
 </head>
 <body>
-<button id="close" type="button" aria-label="Close this page">&times;</button>
+<a class="b" id="back" hidden></a>
 <h1 id="title">Open the desktop app</h1>
 <p id="note"></p>
 <pre id="prompt" hidden></pre>
@@ -58,13 +59,12 @@ async function copyPrompt() {
   }
 }
 
-document.getElementById('close').addEventListener('click', () => {
-  window.close(); // only a page a script opened may close itself
-  setTimeout(() => {
-    if (history.length > 1) history.back();
-    else note.textContent = 'This tab cannot close itself: close it from the browser.';
-  }, 200);
-});
+if (hasPr) {
+  const back = document.getElementById('back');
+  back.href = `https://github.com/${repo}/pull/${pr}`;
+  back.textContent = `\u2190 Back to PR #${pr}`;
+  back.hidden = false;
+}
 
 if (!app || !text) {
   note.textContent = 'This link needs a known client, and a prompt or a repository and pull request number.';
